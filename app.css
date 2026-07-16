@@ -1,34 +1,56 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sign in · OrthoPulse</title>
-<link rel="stylesheet" href="/css/app.css" />
-</head>
-<body>
-<div class="marker l">L<small>ORTHO</small></div>
-<div class="marker r">R<small>PULSE</small></div>
-<div class="page">
-  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px">
-    <div style="width:100%;max-width:360px;text-align:center">
-      <div class="eyebrow">Presenter &amp; author access</div>
-      <h1 style="font-family:var(--f-display);font-weight:700;font-size:34px;margin:0 0 8px">Sign in</h1>
-      <p class="sub">Participants don't need this — only the person running or building the session.</p>
-      <input id="pw" type="password" placeholder="Password" style="font-family:var(--f-body);font-size:18px;width:100%;background:var(--xray-panel);border:1.5px solid var(--line-strong);border-radius:12px;color:var(--bone);padding:15px 16px;text-align:center;margin-bottom:14px" />
-      <button class="btn primary" style="width:100%;justify-content:center" onclick="login()">Enter</button>
-      <div id="msg" class="err" style="margin-top:14px;min-height:18px"></div>
-    </div>
-  </div>
-</div>
-<script>
-const next = new URLSearchParams(location.search).get('next') || '/admin';
-async function login(){
-  const msg = document.getElementById('msg'); msg.textContent='';
-  const r = await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})});
-  if(r.ok){ location.href = next; } else { msg.textContent='Wrong password.'; }
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
+
+:root{
+  --xray-bg:#0d1620; --xray-panel:#14212e; --xray-panel-2:#1b2b3a;
+  --bone:#f0e9db; --bone-dim:#cbc3b2; --teal:#1ab5a4; --teal-deep:#0e7a70;
+  --amber:#e8794a; --slate:#63788a; --line:rgba(240,233,219,.12); --line-strong:rgba(240,233,219,.22);
+  --good:#3fbf7f; --bad:#c9564a; --shadow:0 24px 60px -24px rgba(0,0,0,.7);
+  --f-display:'Space Grotesk',system-ui,sans-serif; --f-body:'Inter',system-ui,sans-serif; --f-mono:'Space Mono',ui-monospace,monospace;
 }
-document.getElementById('pw').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
-</script>
-</body>
-</html>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--f-body);background:var(--xray-bg);color:var(--bone);-webkit-font-smoothing:antialiased;min-height:100vh}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(120% 90% at 50% -10%,rgba(26,181,164,.10),transparent 60%),repeating-linear-gradient(180deg,rgba(255,255,255,.010) 0 1px,transparent 1px 3px);mix-blend-mode:screen}
+#app,.page{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+a{color:var(--teal);text-decoration:none}
+
+.marker{position:fixed;top:14px;font-family:var(--f-mono);font-weight:700;font-size:13px;letter-spacing:.15em;color:var(--bone-dim);border:1.5px solid var(--line-strong);border-radius:3px;padding:3px 7px;background:rgba(13,22,32,.6);backdrop-filter:blur(4px);z-index:5}
+.marker.r{right:14px}.marker.l{left:14px}
+.marker small{display:block;font-size:8px;font-weight:400;letter-spacing:.2em;color:var(--slate);margin-top:1px}
+
+.topbar{display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:18px;letter-spacing:-.01em;color:var(--bone)}
+.logo b{color:var(--teal)}
+.logo .glyph{width:24px;height:24px}
+.spacer{flex:1}
+.pill{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;color:var(--bone-dim);border:1px solid var(--line);border-radius:100px;padding:5px 12px}
+.ghostbtn{font-size:13px;color:var(--bone-dim);border:1px solid var(--line);border-radius:100px;padding:7px 14px;transition:.18s}
+.ghostbtn:hover{color:var(--bone);border-color:var(--line-strong)}
+
+.wrap{width:100%;max-width:1000px;margin:0 auto;padding:24px}
+.btn{font-family:var(--f-display);font-weight:600;font-size:16px;border-radius:12px;padding:15px 28px;transition:.2s;display:inline-flex;align-items:center;gap:10px}
+.btn.primary{background:var(--teal);color:#04201d}.btn.primary:hover{background:#22c8b6;transform:translateY(-2px)}
+.btn.secondary{background:transparent;color:var(--bone);border:1.5px solid var(--line-strong)}.btn.secondary:hover{border-color:var(--teal);color:var(--teal);transform:translateY(-2px)}
+.h-section{font-family:var(--f-display);font-weight:600;font-size:26px;letter-spacing:-.01em;margin:0 0 4px;color:var(--bone)}
+.sub{color:var(--bone-dim);font-size:14px;margin:0 0 24px;line-height:1.5}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--teal);margin-bottom:20px}
+
+.ctrl{font-family:var(--f-display);font-weight:600;font-size:14px;border-radius:10px;padding:11px 18px;border:1.5px solid var(--line-strong);transition:.18s;color:var(--bone)}
+.ctrl:hover{border-color:var(--teal);color:var(--teal)}.ctrl.solid{background:var(--teal);color:#04201d;border-color:var(--teal)}.ctrl.solid:hover{background:#22c8b6}
+.ctrl.warn:hover{border-color:var(--amber);color:var(--amber)}.ctrl:disabled{opacity:.3;cursor:not-allowed}
+
+.credit{font-family:var(--f-mono);font-size:11px;color:var(--slate);text-align:center;padding:18px 24px;line-height:1.7;border-top:1px solid var(--line)}
+.credit b{color:var(--bone-dim);font-weight:400}
+.credit a{color:var(--teal)}
+
+.field{margin-bottom:14px}
+.field label{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin-bottom:6px}
+.field input,.field select,.field textarea{font-family:var(--f-body);font-size:16px;width:100%;background:var(--xray-panel);border:1.5px solid var(--line-strong);border-radius:10px;color:var(--bone);padding:12px 14px}
+.field textarea{min-height:64px;resize:vertical}
+.banner{font-family:var(--f-mono);font-size:12px;color:var(--bone-dim);background:rgba(26,181,164,.08);border:1px solid var(--line);border-radius:10px;padding:10px 14px;line-height:1.6}
+.err{color:var(--amber);font-family:var(--f-mono);font-size:13px}
+.ok{color:var(--teal);font-family:var(--f-mono);font-size:13px}

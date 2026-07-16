@@ -1,73 +1,132 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Present · OrthoPulse</title>
-<link rel="stylesheet" href="/css/app.css" />
-<script src="/socket.io/socket.io.js"></script>
-<style>
-  .stage{flex:1;display:flex;flex-direction:column;padding:20px 24px 24px;max-width:1100px;margin:0 auto;width:100%}
-  .stage-head{display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap}
-  .qcount{font-family:var(--f-mono);font-size:12px;letter-spacing:.14em;color:var(--slate)}
-  .qtype{font-family:var(--f-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal);border:1px solid var(--line);border-radius:100px;padding:3px 10px}
-  .qtext{font-family:var(--f-display);font-weight:600;font-size:clamp(24px,4vw,44px);line-height:1.1;letter-spacing:-.02em;margin:6px 0 18px;max-width:26ch}
-  .qmedia{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
-  .qmedia img{max-height:320px;max-width:min(46%,460px);border-radius:12px;border:1px solid var(--line-strong)}
-  .results{display:flex;flex-direction:column;gap:12px;flex:1;min-width:300px}
-  .bar-row{display:flex;flex-direction:column;gap:6px}
-  .bar-top{display:flex;align-items:baseline;gap:10px}
-  .bar-key{font-family:var(--f-mono);font-size:12px;color:var(--slate);border:1px solid var(--line);border-radius:5px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;flex:none}
-  .bar-label{font-size:16px;font-weight:500;flex:1}
-  .bar-pct{font-family:var(--f-mono);font-size:15px;color:var(--bone-dim)}
-  .bar-track{height:34px;background:var(--xray-panel);border-radius:8px;overflow:hidden;border:1px solid var(--line)}
-  .bar-fill{height:100%;width:0;background:linear-gradient(90deg,var(--teal-deep),var(--teal));border-radius:8px;transition:width .6s cubic-bezier(.2,.7,.2,1);display:flex;align-items:center;justify-content:flex-end;padding-right:10px}
-  .bar-fill.correct{background:linear-gradient(90deg,#1c8f5f,var(--good))}
-  .bar-fill.wrong{background:linear-gradient(90deg,#3a4552,#55616f)}
-  .bar-row.is-correct .bar-label::after{content:"✓";color:var(--good);margin-left:8px}
-  .cnt{font-family:var(--f-mono);font-size:12px;color:rgba(4,32,29,.8);font-weight:700}
-  .empty{color:var(--slate);font-family:var(--f-mono);font-size:13px;padding:16px 0}
+// join.js — participant client
+const socket = io();
+const shell = document.getElementById('shell');
+const card = document.getElementById('card');
+const codepill = document.getElementById('codepill');
 
-  .stage-foot{display:flex;align-items:center;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);flex-wrap:wrap}
-  .votes-live{font-family:var(--f-mono);font-size:13px;color:var(--bone-dim);display:flex;align-items:center;gap:8px}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--teal);animation:pulse 1.8s infinite}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(26,181,164,.5)}70%{box-shadow:0 0 0 10px rgba(26,181,164,0)}100%{box-shadow:0 0 0 0 rgba(26,181,164,0)}}
+let clientId = localStorage.getItem('op_clientId') || null;
+let state = { joined:false, question:null, myChoice:null, answered:false, revealed:false, revealData:null, scoringOn:false, name:'' };
 
-  .joincard{background:var(--xray-panel);border:1px solid var(--line-strong);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;box-shadow:var(--shadow);margin-top:16px}
-  .plate{font-family:var(--f-mono);font-weight:700;font-size:clamp(30px,5vw,50px);letter-spacing:.12em;color:var(--bone);background:#0a1017;border:1px dashed var(--line-strong);border-radius:10px;padding:8px 20px}
-  .jmeta .k{font-family:var(--f-mono);font-size:10px;letter-spacing:.2em;color:var(--teal);text-transform:uppercase}
-  .jmeta .v{font-size:14px;color:var(--bone-dim);max-width:32ch;line-height:1.4;margin-top:4px}
-  .qr{margin-left:auto;background:#fff;padding:8px;border-radius:10px;line-height:0}
-  .qr img{width:120px;height:120px;display:block}
+function el(tag, props={}, ...kids){const n=document.createElement(tag);for(const k in props){if(k==='class')n.className=props[k];else if(k==='html')n.innerHTML=props[k];else if(k.startsWith('on'))n.addEventListener(k.slice(2).toLowerCase(),props[k]);else n.setAttribute(k,props[k]);}kids.flat().forEach(c=>n.append(c&&c.nodeType?c:document.createTextNode(c??'')));return n;}
 
-  .lb{display:flex;flex-direction:column;gap:8px}
-  .lb .row{display:flex;align-items:center;gap:14px;background:var(--xray-panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
-  .lb .row.top{border-color:var(--teal)}
-  .lb .rk{font-family:var(--f-mono);font-weight:700;color:var(--teal)}
-  .lb .nm{flex:1;font-weight:600;font-size:18px}
-  .lb .sc{font-family:var(--f-mono);color:var(--bone-dim);font-size:18px}
+function showCodeEntry(){
+  shell.classList.remove('bright');
+  card.innerHTML='';
+  card.append(
+    el('h2',{},'Enter the code'),
+    el('p',{class:'lead'},'Your presenter is showing a 5-character code.'),
+    (()=>{const i=el('input',{class:'code-input',id:'codeIn',maxlength:'5',placeholder:'· · · · ·',autocomplete:'off',autocapitalize:'characters'});i.addEventListener('input',()=>{i.value=i.value.toUpperCase().replace(/[^A-Z0-9]/g,'');});return i;})(),
+    el('input',{class:'name-input',id:'nameIn',maxlength:'24',placeholder:'Your name (optional)',autocomplete:'off'}),
+    el('button',{class:'send',onClick:doJoin},'Join session'),
+    el('div',{class:'status err',id:'jmsg'})
+  );
+  const q = new URLSearchParams(location.search).get('code');
+  if(q) document.getElementById('codeIn').value = q.toUpperCase().slice(0,5);
+  document.getElementById('codeIn').addEventListener('keydown',e=>{if(e.key==='Enter')doJoin();});
+}
 
-  .picker{max-width:760px;margin:0 auto;width:100%}
-  .bank-row{display:flex;align-items:center;gap:14px;background:var(--xray-panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px;transition:.18s}
-  .bank-row:hover{border-color:var(--line-strong)}
-  .bank-row .bt{flex:1}
-  .bank-row h3{font-family:var(--f-display);font-weight:600;font-size:18px;margin:0 0 3px}
-  .bank-row .bm{font-family:var(--f-mono);font-size:11px;color:var(--slate)}
-  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--bone-dim)}
-</style>
-</head>
-<body>
-<div class="marker l">L<small>ORTHO</small></div>
-<div class="marker r">R<small>PULSE</small></div>
-<div class="page">
-  <div class="topbar">
-    <a class="logo" href="/"><span class="glyph"><svg width="24" height="24" viewBox="0 0 26 26" fill="none"><path d="M7 4c-1.7 0-3 1.3-3 3 0 1.3.8 2.4 2 2.8v6.4c-1.2.4-2 1.5-2 2.8 0 1.7 1.3 3 3 3s3-1.3 3-3c0-1.3-.8-2.4-2-2.8V9.8c1.2-.4 2-1.5 2-2.8 0-1.7-1.3-3-3-3zM19 4c-1.7 0-3 1.3-3 3 0 1.3.8 2.4 2 2.8v6.4c-1.2.4-2 1.5-2 2.8 0 1.7 1.3 3 3 3s3-1.3 3-3c0-1.3-.8-2.4-2-2.8V9.8c1.2-.4 2-1.5 2-2.8 0-1.7-1.3-3-3-3z" stroke="#1ab5a4" stroke-width="1.4"/></svg></span>Ortho<b>Pulse</b></a>
-    <div class="spacer"></div>
-    <a class="ghostbtn" href="/admin">Banks</a>
-    <span class="pill" id="titlepill" style="display:none"></span>
-  </div>
-  <div id="main"></div>
-</div>
-<script src="/js/present.js"></script>
-</body>
-</html>
+function doJoin(){
+  const code=(document.getElementById('codeIn').value||'').toUpperCase().trim();
+  const name=(document.getElementById('nameIn').value||'').trim();
+  const msg=document.getElementById('jmsg'); msg.textContent='';
+  if(code.length<4){msg.textContent='That code looks too short.';return;}
+  state.name=name;
+  socket.emit('join',{code,name,clientId},res=>{
+    if(res.error){msg.textContent=res.error;return;}
+    clientId=res.clientId; localStorage.setItem('op_clientId',clientId);
+    state.joined=true; state.scoringOn=res.scoringOn; state.question=res.question; state.answered=res.alreadyAnswered; state.revealed=res.revealed;
+    codepill.style.display=''; codepill.textContent='Code '+code;
+    shell.classList.add('bright');
+    if(!state.question) showLobby(res.title); else drawQuestion();
+  });
+}
+
+function showLobby(title){
+  card.innerHTML='';
+  card.append(
+    el('div',{class:'thanks'},
+      el('div',{class:'waitspin'}),
+      el('div',{style:'font-family:var(--f-display);font-weight:600;font-size:22px;color:#152029'}, title||'You\u2019re in.'),
+      el('div',{style:'color:#3a464e;margin-top:6px'},'Waiting for the presenter to start\u2026'),
+      state.name?el('div',{class:'pill-dark'},'Joined as '+state.name):''
+    )
+  );
+}
+
+function drawQuestion(){
+  const q=state.question; if(!q){showLobby();return;}
+  shell.classList.add('bright');
+  card.innerHTML='';
+  card.append(el('div',{style:'font-family:var(--f-mono);font-size:12px;color:#5a6670;margin-bottom:4px'}, `Question ${q.index+1} of ${q.total}`));
+  card.append(el('div',{class:'pq'}, q.text||''));
+  if(q.imageUrl) card.append(el('img',{class:'qimg',src:q.imageUrl,alt:''}));
+
+  const opts=el('div',{class:'opts'});
+  q.options.forEach((o,i)=>{
+    let cls='opt';
+    const locked = state.answered || state.revealed;
+    if(state.revealed && state.revealData){
+      if(state.revealData.correct.includes(i)) cls+=' correct';
+      else if(i===state.myChoice) cls+=' incorrect';
+      else cls+=' disabled';
+    } else if(state.myChoice===i){ cls+=' sel'; }
+    else if(locked){ cls+=' disabled'; }
+    const b=el('button',{class:cls,onClick:()=>{ if(state.answered||state.revealed)return; answer(i); }},
+      el('span',{class:'k'}, q.type==='truefalse'? (i===0?'T':'F') : String.fromCharCode(65+i)),
+      el('span',{}, o.text)
+    );
+    if(state.revealed && state.revealData){
+      if(state.revealData.correct.includes(i)) b.append(el('span',{class:'rmark',style:'color:var(--good)'},'✓'));
+      else if(i===state.myChoice) b.append(el('span',{class:'rmark',style:'color:var(--bad)'},'✕'));
+    }
+    opts.append(b);
+  });
+  card.append(opts);
+
+  if(state.revealed && state.revealData){
+    if(state.scoringOn && state.myChoice!=null){
+      const right = state.revealData.correct.includes(state.myChoice);
+      card.append(el('div',{class:'pill-dark',style:right?'color:var(--teal-deep);border-color:var(--teal)':''}, right?'Correct ✓':'Not this time'));
+    }
+    if(state.revealData.explanation) card.append(el('div',{class:'explain'}, state.revealData.explanation));
+  } else if(state.answered){
+    card.append(el('div',{class:'status'},'Answer locked in — waiting for the reveal.'));
+  } else {
+    card.append(el('div',{class:'status'},'Tap your answer.'));
+  }
+}
+
+function answer(i){
+  state.myChoice=i; drawQuestion();
+  socket.emit('answer',{choice:i},res=>{
+    if(res && res.error){ state.myChoice=null; drawQuestion(); return; }
+    state.answered=true; drawQuestion();
+  });
+}
+
+function showLeaderboard(list){
+  card.innerHTML='';
+  card.append(el('h2',{style:'text-align:center'},'Leaderboard'));
+  const lb=el('div',{class:'lb'});
+  list.forEach((p,i)=>{
+    lb.append(el('div',{class:'row'+(p.name===state.name?' me':'')},
+      el('span',{class:'rk'},'#'+(i+1)), el('span',{class:'nm'},p.name), el('span',{class:'sc'},p.score)));
+  });
+  if(!list.length) lb.append(el('div',{class:'row'},'No scores yet.'));
+  card.append(lb);
+}
+
+// ---- socket events ----
+socket.on('question', q=>{ state.question=q; state.myChoice=null; state.answered=false; state.revealed=false; state.revealData=null; drawQuestion(); });
+socket.on('reveal', data=>{ state.revealed=true; state.revealData=data; drawQuestion(); });
+socket.on('leaderboard', list=>{ showLeaderboard(list); });
+socket.on('ended', ({leaderboard})=>{
+  card.innerHTML='';
+  card.append(el('div',{class:'thanks'}, el('div',{class:'big'},'That\u2019s a wrap.'), el('div',{},'Thanks for taking part.')));
+  if(state.scoringOn && leaderboard && leaderboard.length){ card.append(el('div',{style:'height:14px'})); showLeaderboardAppend(leaderboard); }
+});
+function showLeaderboardAppend(list){ const lb=el('div',{class:'lb'}); list.forEach((p,i)=>lb.append(el('div',{class:'row'+(p.name===state.name?' me':'')},el('span',{class:'rk'},'#'+(i+1)),el('span',{class:'nm'},p.name),el('span',{class:'sc'},p.score)))); card.append(lb); }
+socket.on('disconnect', ()=>{ /* socket.io auto-reconnects; state stays */ });
+socket.on('connect', ()=>{ if(state.joined && clientId){ /* re-register on reconnect */ const code=codepill.textContent.replace('Code ','').trim(); socket.emit('join',{code,name:state.name,clientId},()=>{}); } });
+
+showCodeEntry();

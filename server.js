@@ -322,14 +322,39 @@ io.on('connection', (socket) => {
   });
 });
 
-// ---------- static & pages ----------
+// ---------- health check (works even if page files are missing) ----------
+const PUBLIC_DIR = __dirname;
+app.get('/healthz', (req, res) => {
+  res.json({
+    status: 'ok',
+    port: PORT,
+    indexFound: fs.existsSync(path.join(PUBLIC_DIR, 'index.html')),
+    dataDir: store.DATA_DIR,
+    time: new Date().toISOString()
+  });
+});
+
+// ---------- static & pages (flat layout: all files at project root) ----------
 app.use('/uploads', express.static(store.UPLOAD_DIR, { maxAge: '1h' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(PUBLIC_DIR, { extensions: false, index: false }));
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/join', (req, res) => res.sendFile(path.join(__dirname, 'public', 'join.html')));
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-app.get('/present', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'present.html')));
-app.get('/admin', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+function sendPage(res, file) {
+  const p = path.join(PUBLIC_DIR, file);
+  if (!fs.existsSync(p)) {
+    return res.status(500).type('html').send(
+      '<h1>OrthoPulse is running, but a page file is missing.</h1>' +
+      '<p>The server started, but <code>' + file + '</code> was not found. ' +
+      'Re-upload it to your repository and redeploy.</p>' +
+      '<p>Diagnostic: <a href="/healthz">/healthz</a></p>'
+    );
+  }
+  res.sendFile(p);
+}
 
-server.listen(PORT, () => console.log('OrthoPulse running on port ' + PORT));
+app.get('/', (req, res) => sendPage(res, 'index.html'));
+app.get('/join', (req, res) => sendPage(res, 'join.html'));
+app.get('/login', (req, res) => sendPage(res, 'login.html'));
+app.get('/present', requireAuth, (req, res) => sendPage(res, 'present.html'));
+app.get('/admin', requireAuth, (req, res) => sendPage(res, 'admin.html'));
+
+server.listen(PORT, '0.0.0.0', () => console.log('OrthoPulse running on port ' + PORT));
