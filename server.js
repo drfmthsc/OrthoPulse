@@ -240,6 +240,7 @@ io.on('connection', (socket) => {
 
   function stateForHost(s) {
     return {
+      state: s.state,
       question: publicQuestion(s), revealed: s.revealed,
       tally: tallyFor(s), participants: s.participants.size,
       leaderboard: s.scoringOn ? leaderboard(s) : []
