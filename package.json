@@ -1,0 +1,22 @@
+{
+  "name": "orthopulse",
+  "version": "1.0.0",
+  "description": "OrthoPulse — live audience polling and exam quizzing for orthopedic teaching. Created by Dr Harvinder Singh Chhabra.",
+  "author": "Dr Harvinder Singh Chhabra <hschhabra@srhu.edu.in>",
+  "license": "MIT",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.19.2",
+    "multer": "^2.2.0",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5",
+    "xlsx": "^0.18.5"
+  }
+}

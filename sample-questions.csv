@@ -1,0 +1,9 @@
+type,question,option_a,option_b,option_c,option_d,correct,explanation
+mcq,Most common Salter-Harris fracture type?,Type I,Type II,Type III,Type IV,B,Type II accounts for ~75% of physeal injuries. Mnemonic SALTR.
+mcq,The Garden classification grades which fracture?,Femoral neck,Ankle,Distal radius,Intertrochanteric,A,Garden I-IV grades femoral neck displacement; III-IV are displaced.
+mcq,A Gustilo-Anderson IIIB open fracture requires:,Simple washout,Antibiotics only,Flap coverage for soft-tissue loss,Amputation,C,IIIB = extensive soft-tissue loss with periosteal stripping needing flap coverage.
+mcq,Neer classification defines a displaced part as separated by:,>1 cm or >45 degrees,>2 cm or >30 degrees,any gap,>5 mm,A,Neer assesses the four segments of the proximal humerus.
+truefalse,A Weber C ankle fracture is proximal to the syndesmosis.,,,,,True,Weber C implies syndesmotic disruption and often needs fixation.
+truefalse,The Lachman test assesses the PCL.,,,,,False,Lachman is the most sensitive test for the ACL.
+truefalse,Froment's sign indicates ulnar nerve palsy.,,,,,True,Thumb IP flexion substitutes for a weak adductor pollicis.
+mcq,ATLS primary survey sequence?,ABCDE,DRABC,SAMPLE,AVPU,A,Airway with C-spine, Breathing, Circulation, Disability, Exposure.
