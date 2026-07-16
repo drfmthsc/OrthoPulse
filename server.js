@@ -180,22 +180,28 @@ app.get('/api/qr', async (req, res) => {
 const sessions = new Map(); // code -> session
 
 function makeCode() { let c; do { c = store.newId(5).toUpperCase(); } while (sessions.has(c)); return c; }
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 // presenter creates a live session from a bank
 app.post('/api/sessions', requireAuth, (req, res) => {
   const bank = store.getBank(req.body.bankId);
   if (!bank || !bank.questions.length) return res.status(400).json({ error: 'Pick a bank that has questions.' });
   const code = makeCode();
+  let qs = JSON.parse(JSON.stringify(bank.questions)); // snapshot
+  if (req.body.random) shuffle(qs);
+  const timerSeconds = Math.max(5, Math.min(300, Number(req.body.timerSeconds) || 30));
   sessions.set(code, {
     code, bankId: bank.id, title: bank.title,
-    questions: JSON.parse(JSON.stringify(bank.questions)), // snapshot
+    questions: qs,
     activeIndex: 0, revealed: false, state: 'lobby',
     scoringOn: !!req.body.scoringOn,
+    random: !!req.body.random,
+    timerSeconds,
     participants: new Map(), // clientId -> {name, score, answers:{qid:{choice,correct}}}
     votes: {},               // qid -> Map(clientId -> choiceIndex)
     questionStartAt: 0
   });
-  res.json({ code, scoringOn: !!req.body.scoringOn });
+  res.json({ code, scoringOn: !!req.body.scoringOn, timerSeconds });
 });
 
 function publicQuestion(s) {
@@ -204,7 +210,7 @@ function publicQuestion(s) {
     id: q.id, index: s.activeIndex, total: s.questions.length,
     type: q.type, text: q.text, imageUrl: q.imageUrl,
     options: q.options.map(o => ({ text: o.text })),
-    timeLimit: q.timeLimit, scoringOn: s.scoringOn
+    timeLimit: q.timeLimit || s.timerSeconds, scoringOn: s.scoringOn
   };
 }
 function tallyFor(s) {
@@ -220,10 +226,10 @@ function leaderboard(s) {
     .map(p => ({ name: p.name, score: p.score }))
     .sort((a, b) => b.score - a.score).slice(0, 12);
 }
-function scoreFor(q, correct, elapsedMs) {
+function scoreFor(limitSeconds, correct, elapsedMs) {
   if (!correct) return 0;
-  if (!q.timeLimit) return 1000;
-  const frac = Math.min(1, elapsedMs / (q.timeLimit * 1000));
+  if (!limitSeconds) return 1000;
+  const frac = Math.min(1, elapsedMs / (limitSeconds * 1000));
   return Math.round(1000 * (1 - frac / 2)); // 1000 fast → 500 at the buzzer
 }
 
@@ -240,13 +246,23 @@ io.on('connection', (socket) => {
 
   function stateForHost(s) {
     return {
-      state: s.state,
+      state: s.state, timerSeconds: s.timerSeconds,
       question: publicQuestion(s), revealed: s.revealed,
       tally: tallyFor(s), participants: s.participants.size,
       leaderboard: s.scoringOn ? leaderboard(s) : []
     };
   }
   function broadcastHost(s) { io.to('host:' + s.code).emit('host-state', stateForHost(s)); }
+  // throttle the high-frequency (answer-driven) updates so a burst of 150 votes
+  // doesn't flood the presenter; state changes still broadcast immediately.
+  function broadcastHostThrottled(s) {
+    const now = Date.now();
+    if (!s._lastCast) s._lastCast = 0;
+    if (now - s._lastCast >= 350) { s._lastCast = now; broadcastHost(s); }
+    else if (!s._castPending) {
+      s._castPending = setTimeout(() => { s._castPending = null; s._lastCast = Date.now(); broadcastHost(s); }, 350);
+    }
+  }
   function pushQuestion(s) {
     s.revealed = false; s.questionStartAt = Date.now();
     io.to('play:' + s.code).emit('question', publicQuestion(s));
@@ -256,6 +272,13 @@ io.on('connection', (socket) => {
   socket.on('present:next', () => { const s = sessions.get(code); if (!s || role !== 'host') return; if (s.activeIndex < s.questions.length - 1) { s.activeIndex++; s.state = 'live'; pushQuestion(s); } });
   socket.on('present:prev', () => { const s = sessions.get(code); if (!s || role !== 'host') return; if (s.activeIndex > 0) { s.activeIndex--; s.state = 'live'; pushQuestion(s); } });
   socket.on('present:start', () => { const s = sessions.get(code); if (!s || role !== 'host') return; s.state = 'live'; pushQuestion(s); });
+  socket.on('present:setTimer', ({ seconds }) => {
+    const s = sessions.get(code); if (!s || role !== 'host') return;
+    s.timerSeconds = Math.max(5, Math.min(300, Number(seconds) || s.timerSeconds));
+    // if we're mid-question and not yet revealed, restart the countdown so it takes effect now
+    if (s.state === 'live' && !s.revealed) { s.questionStartAt = Date.now(); io.to('play:' + s.code).emit('question', publicQuestion(s)); }
+    broadcastHost(s);
+  });
   socket.on('present:reveal', () => {
     const s = sessions.get(code); if (!s || role !== 'host') return;
     s.revealed = true;
@@ -312,9 +335,9 @@ io.on('connection', (socket) => {
     s.votes[q.id].set(clientId, idx);
     const p = s.participants.get(clientId);
     const correct = q.correct.includes(idx);
-    const pts = s.scoringOn ? scoreFor(q, correct, Date.now() - s.questionStartAt) : 0;
+    const pts = s.scoringOn ? scoreFor(q.timeLimit || s.timerSeconds, correct, Date.now() - s.questionStartAt) : 0;
     if (p) { p.answers[q.id] = { choice: idx, correct, points: pts }; p.score += pts; }
-    broadcastHost(s);
+    broadcastHostThrottled(s);
     ack && ack({ ok: true, received: true });
   });
 

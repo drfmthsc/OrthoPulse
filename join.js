@@ -57,21 +57,26 @@ function drawQuestion(){
   const q=state.question; if(!q){showLobby();return;}
   shell.classList.add('bright');
   card.innerHTML='';
-  card.append(el('div',{style:'font-family:var(--f-mono);font-size:12px;color:#5a6670;margin-bottom:4px'}, `Question ${q.index+1} of ${q.total}`));
+  card.append(el('div',{style:'display:flex;align-items:center;gap:10px;margin-bottom:6px'},
+    el('div',{style:'font-family:var(--f-mono);font-size:12px;color:#5a6670'}, `Question ${q.index+1} of ${q.total}`),
+    el('div',{style:'flex:1'}),
+    (!state.revealed) ? el('div',{class:'pcount'}, el('span',{id:'pnum'}, String(pTimerTotal))) : ''
+  ));
+  if(!state.revealed) card.append(el('div',{class:'ptrack'}, el('div',{class:'pbar',id:'pbar'})));
   card.append(el('div',{class:'pq'}, q.text||''));
   if(q.imageUrl) card.append(el('img',{class:'qimg',src:q.imageUrl,alt:''}));
 
   const opts=el('div',{class:'opts'});
   q.options.forEach((o,i)=>{
     let cls='opt';
-    const locked = state.answered || state.revealed;
+    const locked = state.answered || state.revealed || state.timeUp;
     if(state.revealed && state.revealData){
       if(state.revealData.correct.includes(i)) cls+=' correct';
       else if(i===state.myChoice) cls+=' incorrect';
       else cls+=' disabled';
     } else if(state.myChoice===i){ cls+=' sel'; }
     else if(locked){ cls+=' disabled'; }
-    const b=el('button',{class:cls,onClick:()=>{ if(state.answered||state.revealed)return; answer(i); }},
+    const b=el('button',{class:cls,onClick:()=>{ if(state.answered||state.revealed||state.timeUp)return; answer(i); }},
       el('span',{class:'k'}, q.type==='truefalse'? (i===0?'T':'F') : String.fromCharCode(65+i)),
       el('span',{}, o.text)
     );
@@ -91,17 +96,38 @@ function drawQuestion(){
     if(state.revealData.explanation) card.append(el('div',{class:'explain'}, state.revealData.explanation));
   } else if(state.answered){
     card.append(el('div',{class:'status'},'Answer locked in — waiting for the reveal.'));
+  } else if(state.timeUp){
+    card.append(el('div',{class:'status'},'Time\u2019s up — waiting for results.'));
   } else {
     card.append(el('div',{class:'status'},'Tap your answer.'));
   }
 }
 
 function answer(i){
+  if(state.timeUp) return;
   state.myChoice=i; drawQuestion();
   socket.emit('answer',{choice:i},res=>{
     if(res && res.error){ state.myChoice=null; drawQuestion(); return; }
     state.answered=true; drawQuestion();
   });
+}
+
+// ---- participant countdown ----
+let pTimerInt=null, pTimerEnd=0, pTimerTotal=30;
+function stopPTimer(){ if(pTimerInt){ clearInterval(pTimerInt); pTimerInt=null; } }
+function startPTimer(q){
+  stopPTimer();
+  pTimerTotal = q.timeLimit || 30;
+  pTimerEnd = Date.now() + pTimerTotal*1000;
+  pTick(); pTimerInt=setInterval(pTick,200);
+}
+function pTick(){
+  const remMs=Math.max(0,pTimerEnd-Date.now());
+  const rem=Math.ceil(remMs/1000);
+  const bar=document.getElementById('pbar'); const num=document.getElementById('pnum');
+  if(num) num.textContent=rem;
+  if(bar) bar.style.width=Math.max(0,Math.min(100,remMs/(pTimerTotal*1000)*100))+'%';
+  if(remMs<=0){ stopPTimer(); if(!state.answered && !state.revealed){ state.timeUp=true; drawQuestion(); } }
 }
 
 function showLeaderboard(list){
@@ -117,8 +143,8 @@ function showLeaderboard(list){
 }
 
 // ---- socket events ----
-socket.on('question', q=>{ state.question=q; state.myChoice=null; state.answered=false; state.revealed=false; state.revealData=null; drawQuestion(); });
-socket.on('reveal', data=>{ state.revealed=true; state.revealData=data; drawQuestion(); });
+socket.on('question', q=>{ state.question=q; state.myChoice=null; state.answered=false; state.revealed=false; state.revealData=null; state.timeUp=false; drawQuestion(); startPTimer(q); });
+socket.on('reveal', data=>{ state.revealed=true; state.revealData=data; stopPTimer(); drawQuestion(); });
 socket.on('leaderboard', list=>{ showLeaderboard(list); });
 socket.on('ended', ({leaderboard})=>{
   card.innerHTML='';
